@@ -1,8 +1,11 @@
 import io
+import json
+import re
 import unicodedata
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ==================================================
 # CONFIGURAÇÃO
@@ -619,9 +622,123 @@ st.html(
     + "</div></div>"
 )
 
+# ==================================================
+# IMAGEM DA TABELA
+# ==================================================
+
+# A imagem é gerada no navegador a partir da própria tabela acima,
+# com 3x a resolução da tela, então fica nítida no PowerPoint.
+nome_imagem = re.sub(r"[^\w\- ]", "", titulo).strip() or "tabela"
+
+components.html(
+    f"""
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+<style>
+body {{ margin: 0; font-family: "Source Sans Pro", sans-serif; }}
+button {{
+    background: {cor_principal};
+    color: {cor_cabecalho_texto};
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    margin-right: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}}
+button:disabled {{ opacity: 0.6; cursor: wait; }}
+#msg {{ color: #888; font-size: 13px; }}
+</style>
+<button id="baixar">📷 Baixar imagem (PNG)</button>
+<button id="copiar">📋 Copiar imagem</button>
+<span id="msg"></span>
+<script>
+const NOME = {json.dumps(nome_imagem)};
+const msg = document.getElementById("msg");
+
+function gerar() {{
+    const tabela = window.parent.document.querySelector(".area-print");
+    return htmlToImage.toBlob(tabela, {{
+        pixelRatio: 3,
+        backgroundColor: "#FFFFFF",
+        width: tabela.offsetWidth,
+        height: tabela.offsetHeight
+    }});
+}}
+
+async function executar(botao, acao) {{
+    botao.disabled = true;
+    msg.textContent = "Gerando imagem...";
+    try {{
+        await acao();
+    }} catch (erro) {{
+        msg.textContent = "Não consegui gerar a imagem: " + erro;
+    }}
+    botao.disabled = false;
+}}
+
+document.getElementById("baixar").onclick = (e) => executar(e.target, async () => {{
+    const blob = await gerar();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = NOME + ".png";
+    link.click();
+    msg.textContent = "Imagem baixada.";
+}});
+
+// Quando o navegador bloqueia a área de transferência (acontece dentro
+// do Streamlit Cloud), mostra a imagem por cima da página para copiar
+// com o botão direito, que não depende de permissão.
+function mostrarParaCopiar(blob) {{
+    const doc = window.parent.document;
+    doc.getElementById("imagem-tabela")?.remove();
+
+    const fundo = doc.createElement("div");
+    fundo.id = "imagem-tabela";
+    fundo.style.cssText =
+        "position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.75);" +
+        "display:flex;flex-direction:column;align-items:center;" +
+        "justify-content:center;gap:12px;padding:24px;box-sizing:border-box;";
+
+    const aviso = doc.createElement("div");
+    aviso.textContent =
+        "Clique com o botão direito na imagem e escolha \\"Copiar imagem\\". " +
+        "Depois cole no PowerPoint com Ctrl + V. (Clique fora para fechar)";
+    aviso.style.cssText =
+        "color:#fff;font:15px sans-serif;text-align:center;";
+
+    const img = doc.createElement("img");
+    img.src = URL.createObjectURL(blob);
+    img.style.cssText =
+        "max-width:100%;max-height:85%;background:#fff;" +
+        "box-shadow:0 4px 24px rgba(0,0,0,.5);cursor:context-menu;";
+    img.onclick = (ev) => ev.stopPropagation();
+
+    fundo.onclick = () => fundo.remove();
+    fundo.append(aviso, img);
+    doc.body.appendChild(fundo);
+}}
+
+document.getElementById("copiar").onclick = (e) => executar(e.target, async () => {{
+    const imagem = gerar();
+    try {{
+        await navigator.clipboard.write([
+            new ClipboardItem({{ "image/png": imagem }})
+        ]);
+        msg.textContent = "Copiada! Cole no PowerPoint com Ctrl + V.";
+    }} catch (erro) {{
+        mostrarParaCopiar(await imagem);
+        msg.textContent = "O navegador bloqueou a cópia direta: copie pela imagem aberta.";
+    }}
+}});
+</script>
+""",
+    height=45
+)
+
 st.caption(
     f"{len(tabela_final)} linha(s). "
-    "Dica: Win + Shift + S para recortar só a área branca da tabela. "
+    "A imagem sai igual à tabela acima: escolha antes as colunas, "
+    "os consultores e o título. "
     "Se a tabela não couber na tela, diminua a fonte na barra lateral "
     "ou tire colunas em 'Colunas da tabela'."
 )
