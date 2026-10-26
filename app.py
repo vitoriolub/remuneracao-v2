@@ -207,65 +207,106 @@ with st.expander("Tabela original"):
 st.subheader("Filtros")
 
 df_filtrado = df.copy()
-supervisor = "Todos"
+supervisores = []
+tem_supervisor = "Supervisor" in df.columns
 
 col_sup, col_vend = st.columns([1, 3])
 
 with col_sup:
 
-    if "Supervisor" in df.columns:
+    if tem_supervisor:
 
-        supervisor = st.selectbox(
-            "Supervisor",
-            ["Todos"] + sorted(df["Supervisor"].dropna().astype(str).unique())
+        supervisores = st.multiselect(
+            "Supervisores",
+            sorted(df["Supervisor"].dropna().astype(str).unique()),
+            placeholder="Todos"
         )
 
-        if supervisor != "Todos":
+        st.caption("Deixe vazio para ver todos.")
+
+        if supervisores:
             df_filtrado = df_filtrado[
-                df_filtrado["Supervisor"].astype(str) == supervisor
+                df_filtrado["Supervisor"].astype(str).isin(supervisores)
             ]
 
 with col_vend:
 
     if "Vendedor" in df.columns:
 
-        lista_vendedores = sorted(
-            df_filtrado["Vendedor"].dropna().astype(str).unique()
-        )
+        # Consultores agrupados por supervisor
+        grupos = {}
 
-        # Uma caixa por consultor, guardada por supervisor:
-        # ao trocar de supervisor, todos os consultores dele já vêm marcados.
+        for _, linha in df_filtrado.iterrows():
+
+            if pd.isna(linha["Vendedor"]):
+                continue
+
+            sup = str(linha["Supervisor"]) if tem_supervisor else ""
+            grupos.setdefault(sup, set()).add(str(linha["Vendedor"]))
+
         chaves = {
-            v: f"vend_{supervisor}_{v}"
-            for v in lista_vendedores
+            (sup, v): f"vend_{sup}_{v}"
+            for sup, vends in grupos.items()
+            for v in vends
         }
 
-        for chave in chaves.values():
-            st.session_state.setdefault(chave, True)
+        # O Streamlit apaga o estado de uma caixa quando ela some da tela
+        # (ex.: ao tirar um supervisor da seleção). Por isso os desmarcados
+        # ficam guardados à parte e cada caixa é preenchida a partir daqui.
+        desmarcados = st.session_state.setdefault("desmarcados", set())
 
-        def marcar(valor, chaves=list(chaves.values())):
-            for chave in chaves:
-                st.session_state[chave] = valor
+        for par, chave in chaves.items():
+            st.session_state[chave] = par not in desmarcados
+
+        def alternar(par, chave):
+            if st.session_state[chave]:
+                desmarcados.discard(par)
+            else:
+                desmarcados.add(par)
+
+        def marcar(valor, pares=list(chaves)):
+            if valor:
+                desmarcados.difference_update(pares)
+            else:
+                desmarcados.update(pares)
 
         b1, b2, _ = st.columns([1, 1, 3])
         b1.button("Marcar todos", on_click=marcar, args=(True,))
         b2.button("Desmarcar todos", on_click=marcar, args=(False,))
 
-        marcados = sum(st.session_state[c] for c in chaves.values())
+        marcados = sum(par not in desmarcados for par in chaves)
         st.caption(
-            f"Consultores: {marcados} de {len(lista_vendedores)} marcados"
+            f"Consultores: {marcados} de {len(chaves)} marcados"
         )
 
-        # Grade de 3 colunas: todos ficam visíveis, sem rolagem
-        grade_vend = st.columns(3)
+        selecionados = set()
 
-        vendedores = [
-            v for i, v in enumerate(lista_vendedores)
-            if grade_vend[i % 3].checkbox(v, key=chaves[v])
-        ]
+        for sup in sorted(grupos):
 
-        df_filtrado = df_filtrado[
-            df_filtrado["Vendedor"].astype(str).isin(vendedores)
+            # Com mais de um supervisor, mostra o nome acima dos consultores dele
+            if len(grupos) > 1:
+                st.markdown(f"**{sup}**")
+
+            # Grade de 3 colunas: todos ficam visíveis, sem rolagem
+            grade_vend = st.columns(3)
+
+            for i, v in enumerate(sorted(grupos[sup])):
+                if grade_vend[i % 3].checkbox(
+                    v,
+                    key=chaves[(sup, v)],
+                    on_change=alternar,
+                    args=((sup, v), chaves[(sup, v)])
+                ):
+                    selecionados.add((sup, v))
+
+        pares = zip(
+            df_filtrado["Supervisor"].astype(str) if tem_supervisor
+            else [""] * len(df_filtrado),
+            df_filtrado["Vendedor"].astype(str)
+        )
+
+        df_filtrado = df_filtrado.loc[
+            [par in selecionados for par in pares]
         ]
 
 # ==================================================
@@ -453,14 +494,14 @@ c_titulo, c_ocultar = st.columns([3, 1])
 
 titulo = c_titulo.text_input(
     "Título acima da tabela",
-    value="" if supervisor == "Todos" else supervisor
+    value=" / ".join(supervisores) if len(supervisores) <= 3 else ""
 )
 
 # Com um supervisor só, o nome dele já vai no título
 coluna_supervisor = novos_nomes.get("Supervisor")
 ocultar_supervisor = False
 
-if supervisor != "Todos" and coluna_supervisor:
+if len(supervisores) == 1 and coluna_supervisor:
     c_ocultar.write("")
     ocultar_supervisor = c_ocultar.checkbox(
         "Ocultar coluna Supervisor",
