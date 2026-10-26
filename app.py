@@ -233,26 +233,36 @@ with col_vend:
             df_filtrado["Vendedor"].dropna().astype(str).unique()
         )
 
-        # Uma seleção por supervisor: ao trocar de supervisor,
-        # todos os consultores dele já vêm marcados.
-        chave = f"vendedores_{supervisor}"
+        # Uma caixa por consultor, guardada por supervisor:
+        # ao trocar de supervisor, todos os consultores dele já vêm marcados.
+        chaves = {
+            v: f"vend_{supervisor}_{v}"
+            for v in lista_vendedores
+        }
 
-        if chave not in st.session_state:
-            st.session_state[chave] = lista_vendedores
+        for chave in chaves.values():
+            st.session_state.setdefault(chave, True)
 
-        def marcar(valor, chave=chave):
-            st.session_state[chave] = valor
+        def marcar(valor, chaves=list(chaves.values())):
+            for chave in chaves:
+                st.session_state[chave] = valor
 
-        b1, b2, _ = st.columns([1, 1, 4])
-        b1.button("Marcar todos", on_click=marcar, args=(lista_vendedores,))
-        b2.button("Desmarcar todos", on_click=marcar, args=([],))
+        b1, b2, _ = st.columns([1, 1, 3])
+        b1.button("Marcar todos", on_click=marcar, args=(True,))
+        b2.button("Desmarcar todos", on_click=marcar, args=(False,))
 
-        vendedores = st.pills(
-            f"Consultores ({len(lista_vendedores)}) — clique para incluir/remover",
-            lista_vendedores,
-            selection_mode="multi",
-            key=chave
+        marcados = sum(st.session_state[c] for c in chaves.values())
+        st.caption(
+            f"Consultores: {marcados} de {len(lista_vendedores)} marcados"
         )
+
+        # Grade de 3 colunas: todos ficam visíveis, sem rolagem
+        grade_vend = st.columns(3)
+
+        vendedores = [
+            v for i, v in enumerate(lista_vendedores)
+            if grade_vend[i % 3].checkbox(v, key=chaves[v])
+        ]
 
         df_filtrado = df_filtrado[
             df_filtrado["Vendedor"].astype(str).isin(vendedores)
