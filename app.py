@@ -359,6 +359,53 @@ for coluna, nome in novos_nomes.items():
     else:
         vistos[nome] = 1
 
+# ==================================================
+# ORDENAÇÃO
+# ==================================================
+
+c_ordem, c_sentido, c_agrupar = st.columns([2, 2, 2])
+
+ordenar_por = c_ordem.selectbox(
+    "Ordenar tabela por",
+    ["Ordem da planilha"] + colunas,
+    format_func=lambda c: novos_nomes.get(c, c)
+)
+
+sentido = c_sentido.radio(
+    "Ordem",
+    ["Maior para menor", "Menor para maior"],
+    horizontal=True,
+    disabled=ordenar_por == "Ordem da planilha"
+)
+
+# Com vários supervisores na tabela, ordena dentro de cada um
+agrupar = False
+if tem_supervisor and len(supervisores) != 1 and ordenar_por != "Supervisor":
+    c_agrupar.write("")
+    agrupar = c_agrupar.checkbox(
+        "Manter agrupado por supervisor",
+        value=True,
+        disabled=ordenar_por == "Ordem da planilha"
+    )
+
+if ordenar_por != "Ordem da planilha":
+
+    por = [ordenar_por]
+    crescente = [sentido == "Menor para maior"]
+
+    if agrupar:
+        por.insert(0, "Supervisor")
+        crescente.insert(0, True)
+
+    # df_filtrado é reordenado (e não só a tabela) para o semáforo
+    # da inadimplência continuar comparando cada linha com a sua meta
+    df_filtrado = df_filtrado.sort_values(
+        por,
+        ascending=crescente,
+        na_position="last",
+        kind="stable"
+    )
+
 tabela = df_filtrado[colunas]
 tabela_final = tabela.rename(columns=novos_nomes)
 
