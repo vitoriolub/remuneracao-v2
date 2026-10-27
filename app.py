@@ -141,7 +141,7 @@ arquivo = st.sidebar.file_uploader(
 
 cor_principal = st.sidebar.color_picker(
     "Cor do cabeçalho",
-    "#1E88E5"
+    "#004667"
 )
 
 tamanho_fonte = st.sidebar.slider(
