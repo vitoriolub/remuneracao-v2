@@ -20,6 +20,13 @@ VERDE = "#D4EDDA"
 AMARELO = "#FFF3CD"
 VERMELHO = "#F8D7DA"
 
+# Cores que podem ser escolhidas para destacar o cabeçalho de uma coluna
+# (amarelo e vermelho padrão do Office, iguais aos do PowerPoint)
+CORES_DESTAQUE = {
+    "Amarelo": "#FFC000",
+    "Vermelho": "#C00000",
+}
+
 # ==================================================
 # FUNÇÕES AUXILIARES
 # ==================================================
@@ -363,6 +370,31 @@ for coluna, nome in novos_nomes.items():
         vistos[nome] = 1
 
 # ==================================================
+# CORES DOS CABEÇALHOS
+# ==================================================
+
+with st.expander("Cores dos cabeçalhos", expanded=False):
+
+    colunas_coloridas = st.multiselect(
+        "Colunas com cor própria no cabeçalho (as outras usam a cor da barra lateral)",
+        colunas,
+        format_func=lambda c: novos_nomes.get(c, c),
+        key="colunas_coloridas"
+    )
+
+    cores_colunas = {}
+    grade_cores = st.columns(4)
+
+    for i, coluna in enumerate(colunas_coloridas):
+        escolha = grade_cores[i % 4].radio(
+            novos_nomes[coluna],
+            list(CORES_DESTAQUE),
+            horizontal=True,
+            key=f"cor_{coluna}"
+        )
+        cores_colunas[coluna] = CORES_DESTAQUE[escolha]
+
+# ==================================================
 # ORDENAÇÃO
 # ==================================================
 
@@ -560,6 +592,22 @@ if len(supervisores) == 1 and coluna_supervisor:
 
 if ocultar_supervisor:
     styler = styler.hide(subset=[coluna_supervisor], axis="columns")
+
+# Cor própria no cabeçalho das colunas escolhidas
+if cores_colunas:
+    styler = styler.set_table_styles(
+        {
+            novos_nomes[coluna]: [{
+                "selector": "th",
+                "props": [
+                    ("background-color", cor),
+                    ("color", cor_texto_para(cor))
+                ]
+            }]
+            for coluna, cor in cores_colunas.items()
+        },
+        overwrite=False
+    )
 
 cor_cabecalho_texto = cor_texto_para(cor_principal)
 
