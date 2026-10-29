@@ -27,6 +27,41 @@ CORES_DESTAQUE = {
     "Vermelho": "#C00000",
 }
 
+# Colunas de cada tabela pronta. A coluna Supervisor entra sozinha
+# (e some quando só um supervisor está escolhido).
+TABELAS_KPI = {
+    "Litragem": [
+        "Vendedor",
+        "META LITRAGEM",
+        "REALIZADO LITRAGEM",
+        "INDICE LITRAGEM",
+        "Litragem Texaco Meta",
+        "Litragem Texaco Realizado",
+        "Litragem Texaco Índice",
+        "Litragem Ipiranga Meta",
+        "Litragem Ipiranga Realizado",
+        "Litragem Ipiranga Índice",
+    ],
+    "Agregados": [
+        "Vendedor",
+        "Agregados Meta",
+        "Agregados Realizado",
+        "Agregados Índice",
+    ],
+    "Positivação": [
+        "Vendedor",
+        "Positivação Meta",
+        "Positivação Realizado",
+        "Positivação Índice",
+    ],
+    "SKU": [
+        "Vendedor",
+        "SKU por Cliente Meta",
+        "SKU por Cliente Realizado",
+        "SKU por Cliente Índice",
+    ],
+}
+
 # ==================================================
 # FUNÇÕES AUXILIARES
 # ==================================================
@@ -320,16 +355,52 @@ with col_vend:
         ]
 
 # ==================================================
+# TABELA POR KPI
+# ==================================================
+
+st.markdown("---")
+
+kpi = st.radio(
+    "Tabela",
+    list(TABELAS_KPI) + ["Personalizada"],
+    horizontal=True,
+    key="kpi"
+)
+
+if kpi == "Personalizada":
+    colunas_padrao = df.columns.tolist()
+else:
+    # Compara sem acento e sem maiúsculas, para aceitar pequenas
+    # diferenças de escrita entre a planilha e a lista acima
+    por_nome = {sem_acento(c): c for c in df.columns}
+    colunas_padrao = []
+    faltando = []
+
+    for nome in ["Supervisor"] + TABELAS_KPI[kpi]:
+        coluna = por_nome.get(sem_acento(nome))
+        if coluna is not None:
+            colunas_padrao.append(coluna)
+        elif nome != "Supervisor":
+            faltando.append(nome)
+
+    if faltando:
+        st.warning(
+            "Colunas da tabela " + kpi + " que não estão na planilha: "
+            + ", ".join(faltando)
+        )
+
+# ==================================================
 # COLUNAS
 # ==================================================
 
 with st.expander("Colunas da tabela", expanded=False):
 
+    # Uma escolha de colunas guardada para cada tabela
     colunas = st.multiselect(
         "Escolha as colunas (a ordem aqui é a ordem na tabela)",
         df.columns.tolist(),
-        default=df.columns.tolist(),
-        key="colunas"
+        default=colunas_padrao,
+        key=f"colunas_{kpi}"
     )
 
     numericas = [
@@ -341,7 +412,7 @@ with st.expander("Colunas da tabela", expanded=False):
         "Colunas em % (recebem formatação % e semáforo automaticamente)",
         numericas,
         default=[c for c in numericas if eh_percentual_pelo_nome(c)],
-        key="colunas_percentuais"
+        key=f"colunas_percentuais_{kpi}"
     )
 
     st.markdown("**Renomear colunas**")
@@ -373,26 +444,30 @@ for coluna, nome in novos_nomes.items():
 # CORES DOS CABEÇALHOS
 # ==================================================
 
-with st.expander("Cores dos cabeçalhos", expanded=False):
+cores_colunas = {}
 
-    colunas_coloridas = st.multiselect(
-        "Colunas com cor própria no cabeçalho (as outras usam a cor da barra lateral)",
-        colunas,
-        format_func=lambda c: novos_nomes.get(c, c),
-        key="colunas_coloridas"
-    )
+# Só a tabela de Litragem tem destaque de cor nos cabeçalhos
+if kpi == "Litragem":
 
-    cores_colunas = {}
-    grade_cores = st.columns(4)
+    with st.expander("Cores dos cabeçalhos", expanded=False):
 
-    for i, coluna in enumerate(colunas_coloridas):
-        escolha = grade_cores[i % 4].radio(
-            novos_nomes[coluna],
-            list(CORES_DESTAQUE),
-            horizontal=True,
-            key=f"cor_{coluna}"
+        colunas_coloridas = st.multiselect(
+            "Colunas com cor própria no cabeçalho (as outras usam a cor da barra lateral)",
+            colunas,
+            format_func=lambda c: novos_nomes.get(c, c),
+            key="colunas_coloridas"
         )
-        cores_colunas[coluna] = CORES_DESTAQUE[escolha]
+
+        grade_cores = st.columns(4)
+
+        for i, coluna in enumerate(colunas_coloridas):
+            escolha = grade_cores[i % 4].radio(
+                novos_nomes[coluna],
+                list(CORES_DESTAQUE),
+                horizontal=True,
+                key=f"cor_{coluna}"
+            )
+            cores_colunas[coluna] = CORES_DESTAQUE[escolha]
 
 # ==================================================
 # ORDENAÇÃO
@@ -574,9 +649,14 @@ st.markdown("---")
 
 c_titulo, c_ocultar = st.columns([3, 1])
 
+# Ex.: "Litragem — SUP ALFA"; o título também vira o nome da imagem
+partes_titulo = [] if kpi == "Personalizada" else [kpi]
+if 0 < len(supervisores) <= 3:
+    partes_titulo.append(" / ".join(supervisores))
+
 titulo = c_titulo.text_input(
     "Título acima da tabela",
-    value=" / ".join(supervisores) if len(supervisores) <= 3 else ""
+    value=" — ".join(partes_titulo)
 )
 
 # Com um supervisor só, o nome dele já vai no título
@@ -676,7 +756,7 @@ st.html(
 
 # A imagem é gerada no navegador a partir da própria tabela acima,
 # com 3x a resolução da tela, então fica nítida no PowerPoint.
-nome_imagem = re.sub(r"[^\w\- ]", "", titulo).strip() or "tabela"
+nome_imagem = re.sub(r"\s+", " ", re.sub(r"[^\w\- ]", "", titulo)).strip() or "tabela"
 
 components.html(
     f"""
