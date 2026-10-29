@@ -27,8 +27,43 @@ CORES_DESTAQUE = {
     "Vermelho": "#C00000",
 }
 
-# Colunas de cada tabela pronta. A coluna Supervisor entra sozinha
-# (e some quando só um supervisor está escolhido).
+# Cor que já vem marcada no cabeçalho dessas colunas da tabela de Litragem
+CORES_PADRAO_LITRAGEM = {
+    "Litragem Texaco Meta": "Vermelho",
+    "Litragem Texaco Realizado": "Vermelho",
+    "Litragem Texaco Índice": "Vermelho",
+    "Litragem Ipiranga Meta": "Amarelo",
+    "Litragem Ipiranga Realizado": "Amarelo",
+    "Litragem Ipiranga Índice": "Amarelo",
+}
+
+# Nome que já vem no cabeçalho dessas colunas (dá para mudar em
+# "Colunas da tabela" > "Renomear colunas")
+NOMES_PADRAO = {
+    "META LITRAGEM": "Meta Total",
+    "REALIZADO LITRAGEM": "Realizado Total",
+    "INDICE LITRAGEM": "Índice Total",
+    "Litragem Texaco Meta": "Texaco Meta",
+    "Litragem Texaco Realizado": "Texaco Realizado",
+    "Litragem Texaco Índice": "Texaco Índice",
+    "Litragem Ipiranga Meta": "Ipiranga Meta",
+    "Litragem Ipiranga Realizado": "Ipiranga Realizado",
+    "Litragem Ipiranga Índice": "Ipiranga Índice",
+    "SKU por Cliente Meta": "SKU Meta",
+    "SKU por Cliente Realizado": "SKU Realizado",
+    "SKU por Cliente Índice": "SKU Índice",
+}
+
+# Coluna pela qual cada tabela pronta já vem ordenada, do maior para o menor
+ORDEM_PADRAO = {
+    "Litragem": "INDICE LITRAGEM",
+    "Agregados": "Agregados Índice",
+    "Positivação": "Positivação Índice",
+    "SKU": "SKU por Cliente Índice",
+}
+
+# Colunas de cada tabela pronta (a coluna Supervisor fica de fora;
+# dá para incluir em "Colunas da tabela" quando precisar)
 TABELAS_KPI = {
     "Litragem": [
         "Vendedor",
@@ -376,11 +411,11 @@ else:
     colunas_padrao = []
     faltando = []
 
-    for nome in ["Supervisor"] + TABELAS_KPI[kpi]:
+    for nome in TABELAS_KPI[kpi]:
         coluna = por_nome.get(sem_acento(nome))
         if coluna is not None:
             colunas_padrao.append(coluna)
-        elif nome != "Supervisor":
+        else:
             faltando.append(nome)
 
     if faltando:
@@ -417,13 +452,18 @@ with st.expander("Colunas da tabela", expanded=False):
 
     st.markdown("**Renomear colunas**")
 
+    nome_padrao = {
+        sem_acento(original): novo
+        for original, novo in NOMES_PADRAO.items()
+    }
+
     novos_nomes = {}
     grade = st.columns(3)
 
     for i, coluna in enumerate(colunas):
         novos_nomes[coluna] = grade[i % 3].text_input(
             coluna,
-            value=str(coluna),
+            value=nome_padrao.get(sem_acento(coluna), str(coluna)),
             key=f"nome_{coluna}"
         ).strip() or str(coluna)
 
@@ -449,11 +489,17 @@ cores_colunas = {}
 # Só a tabela de Litragem tem destaque de cor nos cabeçalhos
 if kpi == "Litragem":
 
+    cor_padrao = {
+        sem_acento(nome): cor
+        for nome, cor in CORES_PADRAO_LITRAGEM.items()
+    }
+
     with st.expander("Cores dos cabeçalhos", expanded=False):
 
         colunas_coloridas = st.multiselect(
             "Colunas com cor própria no cabeçalho (as outras usam a cor da barra lateral)",
             colunas,
+            default=[c for c in colunas if sem_acento(c) in cor_padrao],
             format_func=lambda c: novos_nomes.get(c, c),
             key="colunas_coloridas"
         )
@@ -464,6 +510,9 @@ if kpi == "Litragem":
             escolha = grade_cores[i % 4].radio(
                 novos_nomes[coluna],
                 list(CORES_DESTAQUE),
+                index=list(CORES_DESTAQUE).index(
+                    cor_padrao.get(sem_acento(coluna), "Amarelo")
+                ),
                 horizontal=True,
                 key=f"cor_{coluna}"
             )
@@ -475,10 +524,21 @@ if kpi == "Litragem":
 
 c_ordem, c_sentido, c_agrupar = st.columns([2, 2, 2])
 
+opcoes_ordem = ["Ordem da planilha"] + colunas
+
+# Cada tabela pronta já vem ordenada pelo seu índice (maior para menor)
+ordem_inicial = 0
+if kpi in ORDEM_PADRAO:
+    for i, coluna in enumerate(opcoes_ordem):
+        if sem_acento(coluna) == sem_acento(ORDEM_PADRAO[kpi]):
+            ordem_inicial = i
+
 ordenar_por = c_ordem.selectbox(
     "Ordenar tabela por",
-    ["Ordem da planilha"] + colunas,
-    format_func=lambda c: novos_nomes.get(c, c)
+    opcoes_ordem,
+    index=ordem_inicial,
+    format_func=lambda c: novos_nomes.get(c, c),
+    key=f"ordenar_{kpi}"
 )
 
 sentido = c_sentido.radio(
