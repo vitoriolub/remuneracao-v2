@@ -554,7 +554,7 @@ if tem_supervisor and len(supervisores) != 1 and ordenar_por != "Supervisor":
     c_agrupar.write("")
     agrupar = c_agrupar.checkbox(
         "Manter agrupado por supervisor",
-        value=True,
+        value=False,
         disabled=ordenar_por == "Ordem da planilha"
     )
 
@@ -709,14 +709,15 @@ st.markdown("---")
 
 c_titulo, c_ocultar = st.columns([3, 1])
 
-# Ex.: "Litragem — SUP ALFA"; o título também vira o nome da imagem
+# O título começa em branco; sem título, a imagem baixada recebe
+# um nome como "Litragem SUP ALFA" para os arquivos não se repetirem
 partes_titulo = [] if kpi == "Personalizada" else [kpi]
 if 0 < len(supervisores) <= 3:
     partes_titulo.append(" / ".join(supervisores))
 
 titulo = c_titulo.text_input(
-    "Título acima da tabela",
-    value=" — ".join(partes_titulo)
+    "Título acima da tabela (opcional)",
+    value=""
 )
 
 # Com um supervisor só, o nome dele já vai no título
@@ -816,7 +817,10 @@ st.html(
 
 # A imagem é gerada no navegador a partir da própria tabela acima,
 # com 3x a resolução da tela, então fica nítida no PowerPoint.
-nome_imagem = re.sub(r"\s+", " ", re.sub(r"[^\w\- ]", "", titulo)).strip() or "tabela"
+nome_imagem = re.sub(
+    r"\s+", " ",
+    re.sub(r"[^\w\- ]", "", titulo or " ".join(partes_titulo))
+).strip() or "tabela"
 
 components.html(
     f"""
